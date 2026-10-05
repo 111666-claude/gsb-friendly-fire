@@ -30,19 +30,35 @@ func (l *Ledger) Apply(id string, h Hit) (int, string) {
 	if l.pairs == nil {
 		l.pairs = map[string]int{}
 	}
+	if l.seen[id] {
+		return 0, "duplicate id"
+	}
 	l.seen[id] = true
 
+	// 不同队伍不是友伤，按全额伤害结算。
+	if h.Team != h.TargetTeam {
+		return h.Amount, ""
+	}
+
+	// 豁免目标完全免伤。
+	if h.Exempt {
+		return 0, ""
+	}
+
+	// 友伤减半（向下取整）。
 	damage := h.Amount / 2
 
-	used := 0
-	for k, v := range l.pairs {
-		l.Work++
-		if k == pairKey(h.Attacker, h.Target) {
-			used += v
-		}
+	// 同一对攻守的累计友伤不超过阈值，超出部分截断。
+	key := pairKey(h.Attacker, h.Target)
+	used := l.pairs[key]
+	l.Work++
+	if remaining := l.Threshold - used; damage > remaining {
+		damage = remaining
 	}
-	_ = used
+	if damage < 0 {
+		damage = 0
+	}
 
-	l.pairs[pairKey(h.Attacker, h.Target)] += damage
+	l.pairs[key] += damage
 	return damage, ""
 }
