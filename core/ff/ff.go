@@ -30,19 +30,30 @@ func (l *Ledger) Apply(id string, h Hit) (int, string) {
 	if l.pairs == nil {
 		l.pairs = map[string]int{}
 	}
+	if l.seen[id] {
+		return 0, "duplicate"
+	}
 	l.seen[id] = true
+
+	if h.Exempt {
+		return 0, "exempt"
+	}
+
+	if h.Team != h.TargetTeam {
+		return h.Amount, ""
+	}
 
 	damage := h.Amount / 2
 
-	used := 0
-	for k, v := range l.pairs {
-		l.Work++
-		if k == pairKey(h.Attacker, h.Target) {
-			used += v
+	key := pairKey(h.Attacker, h.Target)
+	used := l.pairs[key]
+	l.Work++
+	if used+damage > l.Threshold {
+		damage = l.Threshold - used
+		if damage < 0 {
+			damage = 0
 		}
 	}
-	_ = used
-
-	l.pairs[pairKey(h.Attacker, h.Target)] += damage
+	l.pairs[key] = used + damage
 	return damage, ""
 }
